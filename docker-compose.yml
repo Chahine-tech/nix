@@ -6,6 +6,11 @@ services:
       - "8080:8080"
     volumes:
       - .:/app
+      - nix-store:/nix/store
+      - nix-cache:/nix/var/nix/db
+    environment:
+      - NIX_PATH=/nix/var/nix/profiles/per-user/root/channels
 
 volumes:
   nix-store:
+  nix-cache:

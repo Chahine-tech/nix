@@ -1,11 +1,19 @@
-FROM golang:1.23.2
+FROM nixos/nix:latest
 
 WORKDIR /app
 
-COPY . .
+# Copy files needed for Nix
+COPY flake.nix .
+COPY flake.lock* .
+COPY main.go .
+COPY go.mod .
 
-RUN go mod download
+# Enable flakes
+RUN mkdir -p ~/.config/nix && \
+    echo "experimental-features = nix-command flakes" >> ~/.config/nix/nix.conf
 
+# Build and run using Nix
 EXPOSE 8080
 
-CMD ["go", "run", "main.go"]
+# Use nix develop to run the application
+ENTRYPOINT ["nix", "--extra-experimental-features", "nix-command flakes", "develop", "-c", "go", "run", "main.go"]
