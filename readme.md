@@ -60,8 +60,8 @@ A modern microservices architecture built with Go and managed with Nix. This pro
 
 2. **Clone the Repository**
    ```bash
-   git clone https://github.com/yourusername/your-repo.git
-   cd your-repo
+   git clone https://github.com/Chahine-tech/nix.git
+   cd nix
    ```
 
 3. **Development Environment**
