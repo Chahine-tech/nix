@@ -1,5 +1,5 @@
 {
-  description = "Go Microservices with Nix";
+  description = "Go microservices with Nix";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -9,74 +9,83 @@
   outputs = { self, nixpkgs, flake-utils }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = nixpkgs.legacyPackages.${system};
-      in
-      {
-        devShell = pkgs.mkShell {
+        pkgs = import nixpkgs { inherit system; };
+
+        # Common Go package builder
+        buildGoService = { name, src }: pkgs.buildGoModule {
+          pname = name;
+          version = "0.1.0";
+          inherit src;
+          vendorSha256 = null; # Will be updated on first build
+        };
+
+        # Build all services
+        services = {
+          api = buildGoService {
+            name = "api";
+            src = ./apps/api;
+          };
+          metrics = buildGoService {
+            name = "metrics";
+            src = ./apps/metrics;
+          };
+          worker = buildGoService {
+            name = "worker";
+            src = ./apps/worker;
+          };
+        };
+
+        # Container builder function
+        mkContainer = { name, port ? null, pkg }: pkgs.dockerTools.buildImage {
+          inherit name;
+          tag = "latest";
+          copyToRoot = pkgs.buildEnv {
+            name = "image-root";
+            paths = [ pkg ];
+            pathsToLink = [ "/bin" ];
+          };
+          config = {
+            Cmd = [ "/bin/${name}" ];
+            ExposedPorts = if port != null 
+              then { "${toString port}/tcp" = {}; }
+              else {};
+          };
+        };
+
+      in {
+        # Development shell
+        devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            go
+            go_1_21
             gopls
             go-tools
-            air # For hot reload
+            air # Hot reload
           ];
-
-          shellHook = ''
-            echo "Go development environment ready!"
-          '';
         };
 
-        packages = {
-          api = pkgs.buildGoModule {
-            pname = "api";
-            version = "0.1.0";
-            src = ./apps/api;
-            vendorSha256 = null;
-            preBuild = ''
-              ln -s ${./pkg} pkg
-            '';
+        # Packages
+        packages = services // {
+          # Container images
+          containers = {
+            api = mkContainer {
+              name = "api";
+              port = 8080;
+              pkg = services.api;
+            };
+            metrics = mkContainer {
+              name = "metrics";
+              port = 8081;
+              pkg = services.metrics;
+            };
+            worker = mkContainer {
+              name = "worker";
+              pkg = services.worker;
+            };
           };
-
-          metrics = pkgs.buildGoModule {
-            pname = "metrics";
-            version = "0.1.0";
-            src = ./apps/metrics;
-            vendorSha256 = null;
-            preBuild = ''
-              ln -s ${./pkg} pkg
-            '';
-          };
-
-          worker = pkgs.buildGoModule {
-            pname = "worker";
-            version = "0.1.0";
-            src = ./apps/worker;
-            vendorSha256 = null;
-            preBuild = ''
-              ln -s ${./pkg} pkg
-            '';
-          };
-
-          default = self.packages.${system}.api;
         };
 
-        apps = {
-          api = {
-            type = "app";
-            program = "${self.packages.${system}.api}/bin/api";
-          };
-
-          metrics = {
-            type = "app";
-            program = "${self.packages.${system}.metrics}/bin/metrics";
-          };
-
-          worker = {
-            type = "app";
-            program = "${self.packages.${system}.worker}/bin/worker";
-          };
-
-          default = self.apps.${system}.api;
-        };
+        # NixOS modules
+        nixosModules.default = import ./modules;
       }
     );
 }
