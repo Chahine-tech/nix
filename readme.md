@@ -1,162 +1,118 @@
 # Go Microservices with Nix
 
-A modern microservices architecture built with Go and managed with Nix. This project demonstrates how to build and run multiple Go services using Nix for reproducible development environments and builds.
+This project demonstrates a microservices architecture using Go and Nix for reproducible builds and deployments.
 
 ## Project Structure
 
 ```
 .
-├── apps/
-│   ├── api/             # Main API service
-│   │   ├── main.go
-│   │   ├── go.mod
-│   │   └── Dockerfile
-│   ├── worker/          # Background worker service
-│   │   ├── main.go
-│   │   ├── go.mod
-│   │   └── Dockerfile
-│   └── metrics/         # Metrics service
-│       ├── main.go
-│       ├── go.mod
-│       └── Dockerfile
-├── pkg/                 # Shared packages
-│   ├── logger/          # Common logging package
-├── flake.nix           # Nix flake configuration
-├── flake.lock          # Nix flake lock file
-└── docker-compose.yml  # Docker services configuration
+├── flake.nix           # Main Nix configuration
+├── apps/               # Application services
+├── pkg/                # Shared Go packages
+├── modules/            # NixOS modules
+└── nix/                # Additional Nix configurations
+    ├── ci.nix         # CI/CD configuration
+    └── test-config.nix # NixOS module tests
 ```
 
 ## Services
 
-1. **API Service** (Port 8080)
-   - Main HTTP API service
-   - Handles incoming requests
-   - Uses shared logging package
-
-2. **Metrics Service** (Port 8081)
-   - Exposes service metrics
-   - Tracks request counts
-   - Provides health checks
-
-3. **Worker Service**
-   - Background processing
-   - Handles async tasks
-   - Demonstrates periodic job execution
-
-## Prerequisites
-
-- [Nix](https://nixos.org/download.html) with flakes enabled
-- [Docker](https://docs.docker.com/get-docker/)
-- [Docker Compose](https://docs.docker.com/compose/install/)
-
-## Getting Started
-
-1. **Enable Nix Flakes**
-
-   Add to your `~/.config/nix/nix.conf`:
-   ```
-   experimental-features = nix-command flakes
-   ```
-
-2. **Clone the Repository**
-   ```bash
-   git clone https://github.com/Chahine-tech/nix.git
-   cd nix
-   ```
-
-3. **Development Environment**
-   ```bash
-   # Enter Nix development shell
-   make dev
-   ```
-
-## Running the Services
-
-### Using Docker (Recommended for Development)
-
-Start all services:
-```bash
-make docker-up
-```
-
-Stop all services:
-```bash
-make docker-down
-```
-
-Clean up:
-```bash
-make clean
-```
-
-### Using Nix Directly
-
-Build individual services:
-```bash
-make build-api
-make build-metrics
-make build-worker
-```
-
-Run individual services:
-```bash
-make run-api
-make run-metrics
-make run-worker
-```
+- **API**: HTTP API service (port 8080)
+- **Metrics**: Metrics collection service (port 8081)
+- **Worker**: Background job processor
 
 ## Development
 
-Each service can be developed independently while sharing common code through the `pkg` directory.
+### Prerequisites
 
-### Available Make Commands
+- Nix with flakes enabled
 
-- `make dev` - Enter Nix development shell
-- `make build-all` - Build all services
-- `make build-api` - Build API service
-- `make build-metrics` - Build metrics service
-- `make build-worker` - Build worker service
-- `make run-api` - Run API service
-- `make run-metrics` - Run metrics service
-- `make run-worker` - Run worker service
-- `make docker-up` - Start all services with Docker
-- `make docker-down` - Stop all Docker services
-- `make clean` - Clean up build artifacts and Docker volumes
+### Commands
 
-## Testing the Services
+1. Enter development shell:
+```bash
+nix develop
+```
 
-1. **API Service**
+2. Build a service:
+```bash
+nix build .#api
+nix build .#metrics
+nix build .#worker
+```
+
+3. Build a container:
+```bash
+nix build .#containers.api
+nix build .#containers.metrics
+nix build .#containers.worker
+```
+
+4. Load container into Docker:
+```bash
+docker load < result
+```
+
+### Testing
+
+1. Run NixOS module tests:
+```bash
+nix-build nix/test-config.nix -A test
+```
+
+2. Build and run test VM:
+```bash
+nix-build nix/test-config.nix -A vm
+./result/bin/run-*-vm
+```
+
+3. Run service tests:
+```bash
+nix build .#checks.x86_64-linux.test-all
+```
+
+### Development Tips
+
+- Use `air` for hot reloading during development
+- Each service has its own `go.mod` for dependency management
+- Shared code lives in the `pkg` directory
+- Test new NixOS modules using `nix/test-config.nix`
+
+## Deployment
+
+The project includes NixOS modules for deployment. Configure services in your NixOS configuration:
+
+```nix
+{ config, ... }:
+{
+  imports = [ ./modules ];
+  
+  services.myapp = {
+    api.enable = true;
+    metrics.enable = true;
+    worker.enable = true;
+  };
+}
+```
+
+## Container Images
+
+Container images are built using Nix's `dockerTools` for maximum reproducibility. Images are minimal and contain only the necessary binaries.
+
+## Testing New Modules
+
+When adding new modules or modifying existing ones:
+
+1. Add the module to `modules/`
+2. Update `modules/default.nix` to import it
+3. Add configuration to `nix/test-config.nix`
+4. Test using:
    ```bash
-   curl http://localhost:8080
+   nix-build nix/test-config.nix -A test
    ```
-
-2. **Metrics Service**
+5. For interactive testing, run the VM:
    ```bash
-   curl http://localhost:8081/metrics
+   nix-build nix/test-config.nix -A vm
+   ./result/bin/run-*-vm
    ```
-
-## Project Features
-
-- **Reproducible Development**: Nix ensures consistent development environments
-- **Containerization**: Docker support for easy deployment
-- **Shared Code**: Common packages in `pkg` directory
-- **Structured Logging**: JSON logging with logrus
-- **Metrics**: Built-in metrics service
-- **Background Processing**: Worker service for async tasks
-
-## Nix Configuration
-
-The project uses a Nix flake for:
-- Reproducible development environment
-- Consistent Go version across services
-- Development tools (gopls, go-tools)
-- Hot reload capability with Air
-
-## Docker Configuration
-
-Each service has its own Dockerfile and shares:
-- Common Nix environment
-- Shared packages
-- Volume mounts for development
-- Network configuration
 
